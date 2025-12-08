@@ -20,45 +20,50 @@ OSWP is a powerful, lightweight shell-based tool designed to streamline WordPres
 
 ## Installation
 
-Install OSWP using the following command:
+
+Install OSWP using the following commands:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/onliveserver/oswp/main/install.sh | sudo bash
+git clone https://github.com/onliveserver/oswp.git
+cd oswp
+chmod +x install.sh oswp.sh
+sudo ./install.sh
 ```
 
-This will download and install the `oswp` command to `/usr/local/bin/oswp`.
+This will install the `oswp` command to `/usr/local/bin/oswp`.
 
 ## Usage
 
+
 ### Update WordPress for Specific Users
 
-Update WordPress installations for one or more cPanel users:
+Update all WordPress sites for one or more cPanel users:
 
 ```bash
-sudo oswp -a username1 username2
+sudo oswp -a user1 user2
 ```
 
-Force reinstall all components:
+Force update (reinstall core, plugins, themes):
 
 ```bash
-sudo oswp -a username1 --force
+sudo oswp -a user1 --force
 ```
 
 ### Update WordPress for All Users
 
-Update all WordPress installations across all cPanel users:
+Update all WordPress installations for all cPanel users:
 
 ```bash
 sudo oswp --all
 ```
 
-Force reinstall for all users:
+Force update for all users:
 
 ```bash
 sudo oswp --all --force
 ```
 
-### Help
+### Show Help
 
 Display usage information:
 
