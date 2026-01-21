@@ -108,7 +108,18 @@ doupdate_user() {
     local users=("$@")
 
     for user in "${users[@]}"; do
-        mapfile -t wp_paths < <(find_all_wp_configs | grep "/home.*/$user/.*wp-config.php")
+        local user_home
+        user_home=$(eval echo ~"$user") || {
+            bold_red "Cannot determine home directory for user: $user"
+            continue
+        }
+
+        if [[ ! -d "$user_home" ]]; then
+            bold_red "Home directory does not exist: $user_home"
+            continue
+        fi
+
+        mapfile -t wp_paths < <(find "$user_home" -mindepth 1 -maxdepth 3 -type f -name wp-config.php 2>/dev/null)
 
         if [[ "${#wp_paths[@]}" -eq 0 ]]; then
             bold_red "No WordPress installations found for user: $user"
