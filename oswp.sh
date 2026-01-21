@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 IFS=$'\n\t'
 
 # ========================== CONFIGURATION ==========================
@@ -48,32 +48,65 @@ get_site_url() {
 # ===================== UPDATE FUNCTIONS ============================
 update_core() {
     local path="$1" allow="$2" force="${3:-}"
+    local error_msg
     if [[ -z "$force" ]]; then
-        wp core update --path="$path" $(rootpermissions "$allow") || true
+        if ! error_msg=$(wp core update --path="$path" $(rootpermissions "$allow") 2>&1); then
+            bold_red "Critical error updating core: $error_msg"
+            return 1
+        fi
+        bold_green "Core updated successfully"
     else
-        wp core download --force --path="$path" $(rootpermissions "$allow") || true
+        if ! error_msg=$(wp core download --force --path="$path" $(rootpermissions "$allow") 2>&1); then
+            bold_red "Critical error downloading core: $error_msg"
+            return 1
+        fi
+        bold_green "Core downloaded successfully"
     fi
 }
 
 update_plugins_and_themes() {
     local path="$1" allow="$2" force="${3:-}"
-    local inactive_themes
-    inactive_themes=$(wp theme list --status=inactive --field=name --path="$path" $(rootpermissions "$allow"))
+    local inactive_themes error_msg plugins
 
-    wp plugin delete wp-file-manager hello akismet better-search-replace classic-editor loginizer really-simple-ssl \
-        --path="$path" $(rootpermissions "$allow") || true
+    if ! inactive_themes=$(wp theme list --status=inactive --field=name --path="$path" $(rootpermissions "$allow") 2>&1); then
+        bold_red "Failed to list inactive themes: $inactive_themes"
+        return 1
+    fi
+
+    if ! wp plugin delete wp-file-manager hello akismet better-search-replace classic-editor loginizer really-simple-ssl \
+        --path="$path" $(rootpermissions "$allow") 2>&1; then
+        bold_red "Failed to delete unwanted plugins"
+        return 1
+    fi
 
     if [[ -z "$force" ]]; then
-        wp plugin update --all --path="$path" $(rootpermissions "$allow") || true
+        if ! wp plugin update --all --path="$path" $(rootpermissions "$allow") 2>&1; then
+            bold_red "Failed to update plugins"
+            return 1
+        fi
+        bold_green "Plugins updated successfully"
     else
-        wp plugin install $(wp plugin list --field=name --path="$path" $(rootpermissions "$allow")) --force --path="$path" $(rootpermissions "$allow") || true
+        if ! plugins=$(wp plugin list --field=name --path="$path" $(rootpermissions "$allow") 2>&1); then
+            bold_red "Failed to list plugins: $plugins"
+            return 1
+        fi
+        if ! wp plugin install $plugins --force --path="$path" $(rootpermissions "$allow") 2>&1; then
+            bold_red "Failed to reinstall plugins"
+            return 1
+        fi
+        bold_green "Plugins reinstalled successfully"
     fi
 
     for theme in $inactive_themes; do
-        if ! wp theme is-child-theme "$theme" --path="$path" $(rootpermissions "$allow") 2>/dev/null; then
-            wp theme delete "$theme" --path="$path" $(rootpermissions "$allow") || true
+        if wp theme is-child-theme "$theme" --path="$path" $(rootpermissions "$allow") 2>/dev/null; then
+            continue
+        fi
+        if ! wp theme delete "$theme" --path="$path" $(rootpermissions "$allow") 2>&1; then
+            bold_red "Failed to delete theme $theme"
+            # Continue to next theme instead of failing the whole function
         fi
     done
+    bold_green "Themes cleaned up successfully"
 }
 
 fix_permissions() {
@@ -88,8 +121,15 @@ update_single_wp() {
     local wp_path
     wp_path="$(dirname "$wp_config_path")"
 
-    update_core "$wp_path" "$allow" "$force"
-    update_plugins_and_themes "$wp_path" "$allow" "$force"
+    if ! update_core "$wp_path" "$allow" "$force"; then
+        bold_red "Skipping further updates for $(get_site_url "$wp_path" "$allow" "$user") due to core update failure"
+        return
+    fi
+
+    if ! update_plugins_and_themes "$wp_path" "$allow" "$force"; then
+        bold_red "Plugins/themes update failed for $(get_site_url "$wp_path" "$allow" "$user")"
+        # Still proceed to permissions and success message
+    fi
 
     bold_green "Updated: $(get_site_url "$wp_path" "$allow" "$user")"
     fix_permissions "$wp_path" "$user"
